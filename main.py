@@ -1,47 +1,57 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from openai import OpenAI
 import numpy as np
 import os
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
 app = FastAPI()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-class RankRequest(BaseModel):
+
+class SearchRequest(BaseModel):
     query_id: str
     query: str
     candidates: list[str]
 
-@app.post("/rank")
-async def rank(req: RankRequest):
 
-    texts = [req.query] + req.candidates
+def cosine_similarity(a, b):
+    a = np.array(a)
+    b = np.array(b)
 
+    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+
+def get_embeddings(texts):
     response = client.embeddings.create(
         model="text-embedding-3-small",
         input=texts
     )
 
-    vectors = [d.embedding for d in response.data]
+    return [item.embedding for item in response.data]
 
-    q = np.array(vectors[0])
-    docs = np.array(vectors[1:])
 
-    q = q / np.linalg.norm(q)
-    docs = docs / np.linalg.norm(docs, axis=1, keepdims=True)
+@app.post("/")
+def semantic_search(req: SearchRequest):
 
-    sims = docs @ q
+    texts = [req.query] + req.candidates
 
-    top3 = np.argsort(-sims)[:3]
+    embeddings = get_embeddings(texts)
 
-    return {"ranking": top3.tolist()}
+    query_embedding = embeddings[0]
+    candidate_embeddings = embeddings[1:]
+
+    scores = []
+
+    for i, emb in enumerate(candidate_embeddings):
+        score = cosine_similarity(query_embedding, emb)
+        scores.append((i, score))
+
+    # Sort by similarity descending
+    scores.sort(key=lambda x: x[1], reverse=True)
+
+    top3 = [idx for idx, score in scores[:3]]
+
+    return {
+        "ranking": top3
+    }

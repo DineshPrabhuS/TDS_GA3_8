@@ -2,4 +2,4 @@ fastapi
 uvicorn
 openai
 numpy
-pydantic
+python-dotenv
