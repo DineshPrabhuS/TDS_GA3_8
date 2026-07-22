@@ -6,7 +6,10 @@ import os
 
 app = FastAPI()
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY"),
+    base_url=os.getenv("OPENAI_BASE_URL")
+)
 
 
 class SearchRequest(BaseModel):
@@ -47,7 +50,6 @@ def semantic_search(req: SearchRequest):
         score = cosine_similarity(query_embedding, emb)
         scores.append((i, score))
 
-    # Sort by similarity descending
     scores.sort(key=lambda x: x[1], reverse=True)
 
     top3 = [idx for idx, score in scores[:3]]
